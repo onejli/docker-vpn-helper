@@ -1,0 +1,95 @@
+#!/bin/bash
+
+#TODO Be nice and accept these as cmd line args...
+B2D_MACHINE_NAME=default
+HOST_DOCKER_DAEMON_PORT=2376
+
+GUEST_STATUS=`docker-machine status ${B2D_MACHINE_NAME} 2>&1`
+set -e
+if [ "${GUEST_STATUS}" ==  "unable to load host: Error: Host does not exist: ${B2D_MACHINE_NAME}" ]; then
+    #Create a new Docker host if it doesn't already exist
+    VPN_KEY=`echo "show State:/Network/Service/com.cisco.anyconnect/DNS" | scutil`
+    if [[ "${VPN_KEY}" != *"No such key"* ]]; then
+        echo "Please disconnect from the VPN"
+        exit 1
+    fi
+
+    VBOX_PROCS=`pgrep -f "VirtualBox.app" || exit 0`
+    if [ -n "${VBOX_PROCS}" ]; then
+        echo "Please stop all VirtualBox.app processes"
+        echo ${VBOX_PROCS}
+        exit 2
+    fi
+
+    #TODO Always reload these if the routing table doesn't have vboxnet entries?  Either we've:
+    #1. Disconnected from the VPN and the VPN client has removed the routes without restoring them
+    #       -> The VirtualBox kernel modules are unhappy and can't re-add the routes
+    #          We *must* restart the kernel modules to recover from this situation
+    #2. Started on a fresh host that hasn't connected to VPN...yet
+    #       -> Starting any VirtualBox VM should create the routes
+    #          Restarting the kernel modules isn't needed, but doesn't cost us anything (other than time)
+    #3. Started on a host where VirtualBox isn't configured with *any* host-only network adapters
+    #       -> No routes are needed or will ever be added
+    #          Restarting the kernel modules isn't needed, but doesn't cost us anything (other than time)
+    
+    #TODO Expose this as a standalone command (with the pgrep sanity check)
+    echo "=====Restarting VirtualBox kernel modules====="
+    #We only really need to restart the VirtualBox network kernel modules, but it's easier to restart everything
+    sudo /Library/Application\ Support/VirtualBox/LaunchDaemons/VirtualBoxStartup.sh restart
+
+    echo "=====[${B2D_MACHINE_NAME}] Creating Docker host====="
+    docker-machine create -d virtualbox ${B2D_MACHINE_NAME}
+
+elif [ "${GUEST_STATUS}" == "Stopped" ]; then
+    #Start the Docker host if it isn't already running
+    echo "=====[${B2D_MACHINE_NAME}] Starting Docker host====="
+    docker-machine start ${B2D_MACHINE_NAME}
+fi
+
+#Add a port forwarding rule if it doesn't already exist
+GUEST_DOCKER_DAEMON_PORT=`VBoxManage showvminfo ${B2D_MACHINE_NAME} | grep "guest port = 2376" | sed -e "s/^.*host port = \([0-9]*\),.*/\1/"`
+if [ -z "${GUEST_DOCKER_DAEMON_PORT}" ]; then
+    #Work around the Cisco VPN client bogarting the routing table by using port forwarding for the Docker daemon in the VM
+    echo "=====[${B2D_MACHINE_NAME}] Inserting Docker daemon port forwarding rule====="
+    VBoxManage controlvm ${B2D_MACHINE_NAME} natpf1 dockerdaemon,tcp,127.0.0.1,${HOST_DOCKER_DAEMON_PORT},,2376
+fi
+
+#The Docker daemon and client are protected by mutual auth, but docker-machine creates a cert for the Docker daemon that
+#only binds to the IP of VirtualBox's host-only adapter (that's unroutable because of the Cisco VPN client).  Let's fix
+#this by creating a cert that binds to localhost, 127.0.0.1, *and* the IP of the Virtualbox host-only adapter so the Docker
+#daemon can service requests from the forwarded port *and* the host-only adapter.
+DOCKER_MACHINES_HOME=${HOME}/.docker/machine/machines
+DOCKER_CERTS_HOME=${HOME}/.docker/machine/certs
+SERVER_PEM_LOCATION=/var/lib/boot2docker/server.pem
+SERVER_PEM=`docker-machine ssh ${B2D_MACHINE_NAME} "openssl x509 -noout -text -in ${SERVER_PEM_LOCATION}"`
+#TODO Check the cert that the daemon is serving rather than the cert on disk?
+#     openssl s_client -connect localhost:2376 -tls1 -CAfile ${DOCKER_CERTS_HOME}/ca.pem -cert ${DOCKER_CERTS_HOME}/cert.pem -key ${DOCKER_CERTS_HOME}/key.pem 2>/dev/null </dev/null | openssl x509 -outform PEM
+
+#TODO Regenerate the cert if it's going to expire in the next day? 
+#     openssl x509 -checkend 86400 -noout -in ${SERVER_PEM_LOCATION}
+
+#TODO Expose manual regeneration of the cert as a standalone command
+if [[ ${SERVER_PEM} != *"CN=localhost"* && ${SERVER_PEM} != *"IP:127.0.0.1"* ]]; then
+    #(Re)create the cert if it's missing localhost or 127.0.0.1
+    echo "=====[${B2D_MACHINE_NAME}] Creating a new Docker daemon certificate====="
+    #Let's be good citizens.  Preserve the original cert and re-use the private key.
+    mv ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.pem ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.pem.bak
+
+    #Create a new cert for the Docker daemon and sign it
+    openssl req -subj "/CN=localhost" -sha256 -new -key ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server-key.pem -out ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.csr
+    echo "subjectAltName = IP:$(docker-machine ip ${B2D_MACHINE_NAME}),IP:127.0.0.1" > ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/extfile.cnf
+    openssl x509 -req -days 365 -sha256 -in ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.csr -CA ${DOCKER_CERTS_HOME}/ca.pem -CAkey ${DOCKER_CERTS_HOME}/ca-key.pem -set_serial 0x6f6e656a6c69 -out ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.pem -extfile ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/extfile.cnf
+
+    #Deploy the new cert to the Docker host and restart the Docker daemon to pick up the change
+    echo "=====[${B2D_MACHINE_NAME}] Deploying Certificate to Docker host====="
+    NEW_SERVER_PEM=`cat ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.pem`
+    docker-machine ssh ${B2D_MACHINE_NAME} "echo -e '${NEW_SERVER_PEM}' | sudo tee ${SERVER_PEM_LOCATION}"
+    echo "=====[${B2D_MACHINE_NAME}] Restarting Docker daemon====="
+    docker-machine ssh ${B2D_MACHINE_NAME} "sudo /etc/init.d/docker restart"
+fi
+
+echo "=====Add these to your environment====="
+printf "%s\n" "export DOCKER_TLS_VERIFY="1"
+export DOCKER_HOST="tcp://localhost:${HOST_DOCKER_DAEMON_PORT}"
+export DOCKER_CERT_PATH="${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}"
+export DOCKER_MACHINE_NAME="${B2D_MACHINE_NAME}""
