@@ -35,6 +35,12 @@ Destination        Gateway            Flags        Refs      Use   Netif Expire
 Some additional information can be found [here](https://github.com/docker/machine#docker-machine-hangs).
 > Are you using a VPN? If so, try disconnecting and see if creation will succeed without the VPN. Some VPN software aggressively controls routes and you may need to [manually add the route](https://github.com/docker/machine/issues/1500#issuecomment-121134958).
 
+A better solution than manually re-adding routes is to help VirtualBox fix the routing table.  The Cisco AnyConnect VPN agent removes/redirects routes upon connection, but doesn't restore them after disconnecting.  This seems to make the VirtualBox network kernel modules _very_ unhappy.  After dropping off of VPN, VirtualBox is able to add host-only network adapters, but it is __NOT__ able to add the routes needed to connect them.  [This thread](https://forums.virtualbox.org/viewtopic.php?f=8&t=55066) describes one solution.
+
+1.  Disconnect from the VPN (you can actually leave the Cisco AnyConnect application/services running)
+2.  Stop all VirtualBox processes  (i.e., all VMs and the GUI)
+3.  Restart the VirtualBox kernel modules  
+```sudo /Library/Application\ Support/VirtualBox/LaunchDaemons/VirtualBoxStartup.sh restart``` 
  
 ###What can I do about this?
 The boot2docker VM is also configured with a NAT interface and VirtualBox supports the ability to forward ports between the physical host and the guest VM when using this.  By default, docker-machine maps port `22` of the boot2docker VM to a randomly selected port (e.g., `49417`) on the physical host (it's also configured to only accept connections from `localhost`, but that's a separate discussion).  
