@@ -7,7 +7,7 @@
 ###How does this affect me?
 A VirtualBox host-only network adapter is used to facilitate communication between the [Docker client running on the physical host and the Docker daemon within the boot2docker VM](https://docs.docker.com/introduction/understanding-docker/).  VirtualBox normally adds routes for this to the routing table.  Unfortunately, the Cisco AnyConnect VPN agent manages the routing table with an iron fist and redirects all routes into its `utun0` interface.  This effectively cuts off communication to the Docker daemon running inside of the boot2docker VM.
 
-#####Before connecting to the VPN:
+#####Before connecting to the VPN
 ```
 $ netstat -nr
 Routing tables
@@ -20,7 +20,7 @@ Destination        Gateway            Flags        Refs      Use   Netif Expire
 <SNIP>
 ```
 
-#####After connecting to the VPN:
+#####After connecting to the VPN
 ```
 $ netstat -nr
 Routing tables
@@ -35,6 +35,7 @@ Destination        Gateway            Flags        Refs      Use   Netif Expire
 Some additional information can be found [here](https://github.com/docker/machine#docker-machine-hangs).
 > Are you using a VPN? If so, try disconnecting and see if creation will succeed without the VPN. Some VPN software aggressively controls routes and you may need to [manually add the route](https://github.com/docker/machine/issues/1500#issuecomment-121134958).
 
+#####A partial solution
 A better solution than manually re-adding routes is to help VirtualBox fix the routing table.  The Cisco AnyConnect VPN agent removes/redirects routes upon connection, but doesn't restore them after disconnecting.  This seems to make the VirtualBox network kernel modules _very_ unhappy.  After dropping off of VPN, VirtualBox is able to add host-only network adapters, but it is __NOT__ able to add the routes needed to connect them.  [This thread](https://forums.virtualbox.org/viewtopic.php?f=8&t=55066) describes one solution.
 
 1.  Disconnect from the VPN (you can actually leave the Cisco AnyConnect application/services running)
