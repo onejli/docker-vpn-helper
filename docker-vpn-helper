@@ -1,7 +1,9 @@
 #!/bin/bash
 
 #TODO Be nice and accept these as cmd line args...
-B2D_MACHINE_NAME=default
+if [ -z "$B2D_MACHINE_NAME" ]; then
+  B2D_MACHINE_NAME=default
+fi
 HOST_DOCKER_DAEMON_PORT=2376
 
 GUEST_STATUS=`docker-machine status ${B2D_MACHINE_NAME} 2>&1`
