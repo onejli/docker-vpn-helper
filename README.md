@@ -94,7 +94,7 @@ This script will help you:
   _NOTE: This requirement does not apply when updating an existing VM_
   ```
 $ ./docker-vpn-helper
-Please disconnect from the VPN
+Please disconnect from the VPN and re-run the command: ./docker-vpn-helper
 ```
 
 * All VirtualBox processes must be stopped (i.e., all VMs and the GUI)

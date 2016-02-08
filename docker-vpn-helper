@@ -8,11 +8,11 @@ HOST_DOCKER_DAEMON_PORT=2376
 
 GUEST_STATUS=`docker-machine status ${B2D_MACHINE_NAME} 2>&1`
 set -e
-if [ "${GUEST_STATUS}" ==  "unable to load host: Error: Host does not exist: ${B2D_MACHINE_NAME}" ]; then
+if [[ "${GUEST_STATUS}" =~ "Host does not exist".*"${B2D_MACHINE_NAME}" ]]; then
     #Create a new Docker host if it doesn't already exist
     VPN_KEY=`echo "show State:/Network/Service/com.cisco.anyconnect/DNS" | scutil`
     if [[ "${VPN_KEY}" != *"No such key"* ]]; then
-        echo "Please disconnect from the VPN"
+        echo "Please disconnect from the VPN and re-run the command: $0 $@"
         exit 1
     fi
 
