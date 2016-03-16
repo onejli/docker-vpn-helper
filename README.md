@@ -1,4 +1,4 @@
-# docker-vpn-helper
+s# docker-vpn-helper
 
 ###How does Docker work on OSX?
 [docker-machine](https://docs.docker.com/machine/) leverages VirtualBox to create a boot2docker VM (based on Tiny Core Linux) that exposes the required kernel facilities (e.g., cgroups and namespaces) needed by the Docker daemon.  The Docker client for OSX relies on the Docker daemon running within the boot2docker VM to perform all of its actions.
@@ -155,6 +155,9 @@ export DOCKER_HOST=tcp://localhost:2376
 export DOCKER_CERT_PATH=/Users/jonathan.li/.docker/machine/machines/default
 export DOCKER_MACHINE_NAME=default
 ```
+
+
+You can rerun with eval $(docker-vpn-helper) to set your environment variables
 
 3. Let's make sure a VM was created
   ```
