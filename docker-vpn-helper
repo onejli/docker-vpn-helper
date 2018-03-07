@@ -78,11 +78,6 @@ fi
 echo "Checking for cygpath"
 CYGPATH_EXISTS=exec command -v cygpath
 CYGPATH_EXISTS=$?
-if [ ${CYGPATH_EXISTS} ]; then
-    echo "Converting windows to UNIX paths"
-    DOCKER_MACHINES_HOME=`cygpath ${DOCKER_MACHINES_HOME}`
-    DOCKER_CERTS_HOME=`cygpath ${DOCKER_CERTS_HOME}`
-fi
 echo "DOCKER_MACHINES_HOME: ${DOCKER_MACHINES_HOME}"
 echo "DOCKER_CERTS_HOME: ${DOCKER_CERTS_HOME}"
 
