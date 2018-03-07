@@ -77,7 +77,8 @@ fi
 #If on windows and cypath is available, use it to convert the paths
 echo "Checking for cygpath"
 CYGPATH_EXISTS=exec command -v cygpath
-if [ $? ]; then
+CYGPATH_EXISTS=$?
+if [ ${CYGPATH_EXISTS} ]; then
     echo "Converting windows to UNIX paths"
     DOCKER_MACHINES_HOME=`cygpath ${DOCKER_MACHINES_HOME}`
     DOCKER_CERTS_HOME=`cygpath ${DOCKER_CERTS_HOME}`
@@ -101,7 +102,13 @@ if [[ ${SERVER_PEM} != *"CN=localhost"* && ${SERVER_PEM} != *"IP:127.0.0.1"* ]];
     mv ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.pem ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.pem.bak
 
     #Create a new cert for the Docker daemon and sign it
-    openssl req -subj "/CN=localhost" -sha256 -new -key ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server-key.pem -out ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.csr
+    if [ ! ${CYGPATH_EXISTS} ]; then
+        openssl req -subj "/CN=localhost" -sha256 -new -key ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server-key.pem -out ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.csr
+    else
+        # This madness is necessary for the openssl subject to be read correctly in MinGW/MSYS on windows
+        # see: https://stackoverflow.com/questions/31506158/running-openssl-from-a-bash-script-on-windows-subject-does-not-start-with
+        openssl req -subj "//CN=localhost" -sha256 -new -key ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server-key.pem -out ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.csr
+    fi
     echo "subjectAltName = IP:$(docker-machine ip ${B2D_MACHINE_NAME}),IP:127.0.0.1" > ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/extfile.cnf
     openssl x509 -req -days 365 -sha256 -in ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.csr -CA ${DOCKER_CERTS_HOME}/ca.pem -CAkey ${DOCKER_CERTS_HOME}/ca-key.pem -set_serial 0x6f6e656a6c69 -out ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.pem -extfile ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/extfile.cnf
 
