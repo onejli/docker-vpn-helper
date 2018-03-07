@@ -74,7 +74,7 @@ else
     DOCKER_CERTS_HOME=${HOME}/.docker/machine/certs
 fi
 
-#If on windows and cypath is available, use it to convert the paths
+#Check for windows environment
 echo "Checking for cygpath"
 CYGPATH_EXISTS=exec command -v cygpath
 CYGPATH_EXISTS=$?
