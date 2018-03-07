@@ -60,8 +60,31 @@ fi
 #only binds to the IP of VirtualBox's host-only adapter (that's unroutable because of the Cisco VPN client).  Let's fix
 #this by creating a cert that binds to localhost, 127.0.0.1, *and* the IP of the Virtualbox host-only adapter so the Docker
 #daemon can service requests from the forwarded port *and* the host-only adapter.
-DOCKER_MACHINES_HOME=${HOME}/.docker/machine/machines
-DOCKER_CERTS_HOME=${HOME}/.docker/machine/certs
+if [ -n "${MACHINE_STORAGE_PATH}" ]; then
+    echo "Detected machine storage path: ${MACHINE_STORAGE_PATH}"
+    DOCKER_MACHINES_HOME="${MACHINE_STORAGE_PATH}/machines"
+else
+    DOCKER_MACHINES_HOME=${HOME}/.docker/machine/machines
+fi
+
+if [ -n "${DOCKER_CERT_PATH}" ]; then
+    echo "Detected docker cert path: ${DOCKER_CERT_PATH}"
+    DOCKER_CERTS_HOME="${DOCKER_CERT_PATH}"
+else
+    DOCKER_CERTS_HOME=${HOME}/.docker/machine/certs
+fi
+
+#If on windows and cypath is available, use it to convert the paths
+echo "Checking for cygpath"
+CYGPATH_EXISTS=exec command -v cygpath
+if [ $? ]; then
+    echo "Converting windows to UNIX paths"
+    DOCKER_MACHINES_HOME=`cygpath ${DOCKER_MACHINES_HOME}`
+    DOCKER_CERTS_HOME=`cygpath ${DOCKER_CERTS_HOME}`
+fi
+echo "DOCKER_MACHINES_HOME: ${DOCKER_MACHINES_HOME}"
+echo "DOCKER_CERTS_HOME: ${DOCKER_CERTS_HOME}"
+
 SERVER_PEM_LOCATION=/var/lib/boot2docker/server.pem
 SERVER_PEM=`docker-machine ssh ${B2D_MACHINE_NAME} "openssl x509 -noout -text -in ${SERVER_PEM_LOCATION}"`
 #TODO Check the cert that the daemon is serving rather than the cert on disk?
