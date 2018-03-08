@@ -60,8 +60,32 @@ fi
 #only binds to the IP of VirtualBox's host-only adapter (that's unroutable because of the Cisco VPN client).  Let's fix
 #this by creating a cert that binds to localhost, 127.0.0.1, *and* the IP of the Virtualbox host-only adapter so the Docker
 #daemon can service requests from the forwarded port *and* the host-only adapter.
-DOCKER_MACHINES_HOME=${HOME}/.docker/machine/machines
-DOCKER_CERTS_HOME=${HOME}/.docker/machine/certs
+if [ -n "${MACHINE_STORAGE_PATH}" ]; then
+    echo "Detected machine storage path: ${MACHINE_STORAGE_PATH}"
+    DOCKER_MACHINES_HOME="${MACHINE_STORAGE_PATH}/machines"
+else
+    DOCKER_MACHINES_HOME=${HOME}/.docker/machine/machines
+fi
+
+if [ -n "${DOCKER_CERT_PATH}" ]; then
+    echo "Detected docker cert path: ${DOCKER_CERT_PATH}"
+    DOCKER_CERTS_HOME="${DOCKER_CERT_PATH}"
+else
+    DOCKER_CERTS_HOME=${HOME}/.docker/machine/certs
+fi
+
+#Check for windows environment
+echo "Checking for mingw environment"
+UNAME_STRING=`uname -s`
+if [[ "${UNAME_STRING}" =~ MINGW.* ]]; then
+    IS_MINGW=0
+else
+    IS_MINGW=1
+fi
+echo "DOCKER_MACHINES_HOME: ${DOCKER_MACHINES_HOME}"
+echo "DOCKER_CERTS_HOME: ${DOCKER_CERTS_HOME}"
+echo "IS_MINGW: ${IS_MINGW}"
+
 SERVER_PEM_LOCATION=/var/lib/boot2docker/server.pem
 SERVER_PEM=`docker-machine ssh ${B2D_MACHINE_NAME} "openssl x509 -noout -text -in ${SERVER_PEM_LOCATION}"`
 #TODO Check the cert that the daemon is serving rather than the cert on disk?
@@ -78,7 +102,14 @@ if [[ ${SERVER_PEM} != *"CN=localhost"* && ${SERVER_PEM} != *"IP:127.0.0.1"* ]];
     mv ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.pem ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.pem.bak
 
     #Create a new cert for the Docker daemon and sign it
-    openssl req -subj "/CN=localhost" -sha256 -new -key ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server-key.pem -out ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.csr
+    if [ ! ${IS_MINGW} ]; then
+        openssl req -subj "/CN=localhost" -sha256 -new -key ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server-key.pem -out ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.csr
+    else
+        echo "Using MINGW invocation of openssl"
+        # This madness is necessary for the openssl subject to be read correctly in MinGW/MSYS on windows
+        # see: https://stackoverflow.com/questions/31506158/running-openssl-from-a-bash-script-on-windows-subject-does-not-start-with
+        openssl req -subj "//CN=localhost" -sha256 -new -key ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server-key.pem -out ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.csr
+    fi
     echo "subjectAltName = IP:$(docker-machine ip ${B2D_MACHINE_NAME}),IP:127.0.0.1" > ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/extfile.cnf
     openssl x509 -req -days 365 -sha256 -in ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.csr -CA ${DOCKER_CERTS_HOME}/ca.pem -CAkey ${DOCKER_CERTS_HOME}/ca-key.pem -set_serial 0x6f6e656a6c69 -out ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.pem -extfile ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/extfile.cnf
 
