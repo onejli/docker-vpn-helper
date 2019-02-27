@@ -79,7 +79,7 @@ if [[ ${SERVER_PEM} != *"CN=localhost"* && ${SERVER_PEM} != *"IP:127.0.0.1"* ]];
 
     #Create a new cert for the Docker daemon and sign it
     openssl req -subj "/CN=localhost" -sha256 -new -key ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server-key.pem -out ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.csr
-    echo "subjectAltName = IP:$(docker-machine ip ${B2D_MACHINE_NAME}),IP:127.0.0.1" > ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/extfile.cnf
+    echo "subjectAltName = IP:$(docker-machine ip ${B2D_MACHINE_NAME}),IP:127.0.0.1,DNS:localhost" > ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/extfile.cnf
     openssl x509 -req -days 365 -sha256 -in ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.csr -CA ${DOCKER_CERTS_HOME}/ca.pem -CAkey ${DOCKER_CERTS_HOME}/ca-key.pem -set_serial 0x6f6e656a6c69 -out ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/server.pem -extfile ${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}/extfile.cnf
 
     #Deploy the new cert to the Docker host and restart the Docker daemon to pick up the change
