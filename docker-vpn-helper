@@ -90,7 +90,8 @@ if [[ ${SERVER_PEM} != *"CN=localhost"* && ${SERVER_PEM} != *"IP:127.0.0.1"* ]];
     docker-machine ssh ${B2D_MACHINE_NAME} "sudo /etc/init.d/docker restart"
 fi
 
-echo "=====Add these to your environment====="
+#Send this message to stderr so can evaluate it
+echo "=====Add these to your environment=====" >&2
 printf "%s\n" "export DOCKER_TLS_VERIFY="1"
 export DOCKER_HOST="tcp://localhost:${HOST_DOCKER_DAEMON_PORT}"
 export DOCKER_CERT_PATH="${DOCKER_MACHINES_HOME}/${B2D_MACHINE_NAME}"
